@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CubeSat Ground Station</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #070915;
+    --panel: #10143080;
+    --panel-2: #151b3699;
+    --line: #242c58;
+    --text: #f1f5ff;
+    --muted: #8892c4;
+    --cyan: #00f0ff;
+    --amber: #ffb627;
+    --red: #ff3d68;
+    --green: #39ff9e;
+    --blue: #4c7cff;
+    --violet: #c86dff;
+    --pink: #ff4fd8;
+    --acc1a: #4c7cff; --acc1b: #c86dff;
+    --acc2a: #ffb627; --acc2b: #ff3d68;
+    --acc3a: #39ff9e; --acc3b: #00f0ff;
+    --acc4a: #c86dff; --acc4b: #ff4fd8;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(76,124,255,.22) 0%, transparent 55%),
+      radial-gradient(900px 500px at 110% 10%, rgba(0,240,255,.16) 0%, transparent 55%),
+      radial-gradient(900px 600px at 20% 100%, rgba(200,109,255,.16) 0%, transparent 50%),
+      radial-gradient(800px 500px at 85% 90%, rgba(255,79,216,.14) 0%, transparent 50%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+  }
+
+  .scanlines{
+    pointer-events:none;
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    z-index:50;
+  }
+
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 28px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    position:relative;
+  }
+  header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,var(--cyan),var(--blue) 30%,var(--violet) 60%,var(--pink));opacity:.7;}
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand svg{ flex-shrink:0; filter:drop-shadow(0 0 6px rgba(0,240,255,.5)); }
+  .brand h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size:20px; letter-spacing:0.03em; margin:0;
+    background:linear-gradient(90deg,var(--cyan),var(--blue) 45%,var(--violet) 75%,var(--pink));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 8px rgba(0,240,255,.3));
+  }
+  .brand p{ margin:2px 0 0; font-size:11.5px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; }
+
+  .status-group{ display:flex; align-items:center; gap:16px; }
+  .status-pill{
+    display:flex; align-items:center; gap:8px;
+    padding:7px 14px; border-radius:20px;
+    border:1px solid var(--line); background:var(--panel);
+    font-size:12px; letter-spacing:0.06em;
+  }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .status-pill.live .dot{ background:var(--green); box-shadow:0 0 10px var(--green),0 0 20px rgba(57,255,158,.5); animation:pulse 1.4s infinite; }
+  .status-pill.live{ border-color:var(--green); box-shadow:0 0 14px rgba(57,255,158,.2); }
+  .status-pill.offline .dot{ background:var(--red); box-shadow:0 0 8px var(--red); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  button{
+    font-family:inherit; font-size:13px; letter-spacing:0.04em;
+    padding:9px 18px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--cyan); background:transparent; color:var(--cyan);
+    transition:background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  button:hover{ background:linear-gradient(120deg,var(--cyan),var(--blue)); color:#04121a; box-shadow:0 0 16px rgba(0,240,255,.45); }
+  button:disabled{ opacity:0.35; cursor:not-allowed; border-color:var(--line); color:var(--muted); }
+  button:disabled:hover{ background:transparent; color:var(--muted); box-shadow:none; }
+
+  main{
+    max-width:1240px; margin:0 auto; padding:28px;
+    display:grid; gap:20px;
+    grid-template-columns: 1.15fr 0.85fr;
+  }
+  @media (max-width: 880px){ main{ grid-template-columns: 1fr; } }
+
+  .panel{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px;
+    overflow:hidden;
+    transition:box-shadow .2s, border-color .2s, transform .2s;
+  }
+  .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--pa),var(--pb));}
+  .panel:hover{border-color:var(--line-bright, #3d4c99);transform:translateY(-2px);box-shadow:0 10px 28px -8px rgba(0,0,0,.55);}
+  main > .panel:nth-of-type(1){--pa:var(--acc1a);--pb:var(--acc1b);}
+  main > .panel:nth-of-type(2){--pa:var(--acc2a);--pb:var(--acc2b);}
+  main > .panel:nth-of-type(3){--pa:var(--acc3a);--pb:var(--acc3b);}
+  main > .panel:nth-of-type(4){--pa:var(--acc4a);--pb:var(--acc4b);}
+  .panel-title{
+    font-family:'Space Grotesk', sans-serif; font-weight:600;
+    font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted);
+    margin:0 0 16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel-title::before{ content:''; width:9px; height:9px; border-radius:50%; background:linear-gradient(120deg,var(--pa),var(--pb)); box-shadow:0 0 8px var(--pa); display:inline-block; }
+
+  .cube-wrap{ grid-row: span 2; display:flex; flex-direction:column; }
+  #cubeCanvas{ width:100%; height:380px; border-radius:10px; background:radial-gradient(circle at 50% 40%, #131c33 0%, #070a12 75%); }
+
+  .axis-readout{ display:flex; gap:10px; margin-top:16px; }
+  .axis-chip{
+    flex:1; text-align:center; padding:10px 6px;
+    min-height:70px;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:10px;
+    transition:box-shadow .15s, border-color .15s;
+  }
+  .axis-chip .label{ font-size:10.5px; color:var(--muted); letter-spacing:0.1em; }
+  .axis-chip .value{ font-size:20px; font-weight:600; margin-top:4px; font-variant-numeric: tabular-nums; }
+  .axis-chip.x{ border-color:rgba(0,240,255,.25); }
+  .axis-chip.x .value{ color:var(--cyan); text-shadow:0 0 10px rgba(0,240,255,.4); }
+  .axis-chip.y{ border-color:rgba(255,182,39,.25); }
+  .axis-chip.y .value{ color:var(--amber); text-shadow:0 0 10px rgba(255,182,39,.4); }
+  .axis-chip.z{ border-color:rgba(200,109,255,.25); }
+  .axis-chip.z .value{ color:var(--violet); text-shadow:0 0 10px rgba(200,109,255,.4); }
+
+  .metric-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .metric{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px;
+    min-height:70px;
+    display:flex; flex-direction:column; justify-content:center;
+    transition:border-color .15s;
+  }
+  .metric.metric-full{ grid-column:1 / -1; }
+  .metric:hover{ border-color:var(--blue); }
+  .metric .label{ font-size:10.5px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; }
+  .metric .value{ font-size:20px; font-weight:600; margin-top:4px; font-variant-numeric: tabular-nums; overflow-wrap:anywhere; }
+  .metric .unit{ font-size:12px; color:var(--muted); margin-left:3px; }
+
+  .quality-tag{
+    display:inline-block; margin-top:6px; padding:3px 10px; border-radius:20px;
+    font-size:11px; letter-spacing:0.05em; font-weight:600;
+  }
+  .q-good{ background:rgba(57,255,158,0.15); color:var(--green); box-shadow:0 0 10px rgba(57,255,158,.25); }
+  .q-moderate{ background:rgba(255,182,39,0.15); color:var(--amber); box-shadow:0 0 10px rgba(255,182,39,.25); }
+  .q-poor{ background:rgba(255,140,60,0.15); color:#ff8c3c; box-shadow:0 0 10px rgba(255,140,60,.25); }
+  .q-unhealthy{ background:rgba(255,61,104,0.15); color:var(--red); box-shadow:0 0 10px rgba(255,61,104,.25); }
+  .q-hazardous{ background:rgba(255,61,104,0.28); color:var(--red); box-shadow:0 0 12px rgba(255,61,104,.4); }
+  .q-unknown{ background:rgba(136,146,196,0.18); color:var(--muted); }
+
+  .gps-row{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+  .fix-pill{ font-size:11px; padding:3px 10px; border-radius:20px; letter-spacing:0.05em; }
+  .fix-yes{ background:rgba(57,255,158,0.15); color:var(--green); box-shadow:0 0 10px rgba(57,255,158,.25); }
+  .fix-no{ background:rgba(255,61,104,0.15); color:var(--red); }
+
+  footer{ text-align:center; padding:18px; color:var(--muted); font-size:11px; letter-spacing:0.05em; }
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+      <rect x="10" y="10" width="14" height="14" rx="2" stroke="#00f0ff" stroke-width="1.6"/>
+      <rect x="4" y="4" width="6" height="6" rx="1" fill="#00f0ff" opacity="0.7"/>
+      <rect x="24" y="24" width="6" height="6" rx="1" fill="#00f0ff" opacity="0.7"/>
+      <line x1="10" y1="13" x2="4" y2="7" stroke="#00f0ff" stroke-width="1.2"/>
+      <line x1="24" y1="21" x2="30" y2="27" stroke="#00f0ff" stroke-width="1.2"/>
+    </svg>
+    <div>
+      <h1>CUBESAT GROUND STATION</h1>
+      <p>Live telemetry &mdash; MPU6050 &middot; BME280 &middot; MQ-135 &middot; NEO-6M</p>
+    </div>
+  </div>
+  <div class="status-group">
+    <span id="lastPacket" style="font-size:11px;color:var(--muted);">no data yet</span>
+    <div class="status-pill offline" id="statusPill"><span class="dot"></span><span id="statusText">OFFLINE</span></div>
+    <button id="connectBtn">Connect Device</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel cube-wrap">
+    <div class="panel-title">Attitude / Orientation</div>
+    <canvas id="cubeCanvas"></canvas>
+    <div class="axis-readout">
+      <div class="axis-chip x"><div class="label">TILT X (ROLL)</div><div class="value" id="valTiltX">0.0&deg;</div></div>
+      <div class="axis-chip y"><div class="label">TILT Y (PITCH)</div><div class="value" id="valTiltY">0.0&deg;</div></div>
+      <div class="axis-chip z"><div class="label">TILT Z (YAW, EST.)</div><div class="value" id="valTiltZ">0.0&deg;</div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">Environment &mdash; BME280</div>
+    <div class="metric-grid">
+      <div class="metric"><div class="label">Temperature</div><div class="value" id="valTemp">--<span class="unit">&deg;C</span></div></div>
+      <div class="metric"><div class="label">Altitude (Baro)</div><div class="value" id="valBaroAlt">--<span class="unit">m</span></div></div>
+      <div class="metric metric-full"><div class="label">Pressure</div><div class="value" id="valPressure">--<span class="unit">hPa</span></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">Air Quality &mdash; MQ-135</div>
+    <div class="metric-grid">
+      <div class="metric metric-full">
+        <div class="label">Estimated PPM</div>
+        <div class="value" id="valPpm">--</div>
+        <span class="quality-tag q-unknown" id="qualityTag">UNKNOWN</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">Navigation &mdash; NEO-6M GPS</div>
+    <div class="gps-row">
+      <span style="font-size:11px;color:var(--muted);">SATELLITES: <b id="valSats" style="color:var(--text);">0</b></span>
+      <span class="fix-pill fix-no" id="fixPill">NO FIX</span>
+    </div>
+    <div class="metric-grid">
+      <div class="metric"><div class="label">Latitude</div><div class="value" id="valLat">--</div></div>
+      <div class="metric"><div class="label">Longitude</div><div class="value" id="valLon">--</div></div>
+      <div class="metric metric-full"><div class="label">Altitude</div><div class="value" id="valAlt">--<span class="unit">m</span></div></div>
+    </div>
+  </section>
+</main>
+
+<footer>Connect over USB &middot; 115200 baud &middot; Chrome / Edge required (Web Serial API)</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+  // ---------------------------------------------------------------------
+  // 3D orientation cube (three.js) - a small "satellite" cube with axis
+  // colored faces so the currently-facing side is always identifiable.
+  // ---------------------------------------------------------------------
+  const canvas = document.getElementById('cubeCanvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  camera.position.set(2.6, 2.0, 3.2);
+  camera.lookAt(0, 0, 0);
+
+  function resizeCanvas() {
+    const w = canvas.clientWidth, h = canvas.clientHeight || 380;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const key = new THREE.DirectionalLight(0x9be8ff, 1.1);
+  key.position.set(3, 4, 2);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xff9b6a, 0.4);
+  rim.position.set(-3, -2, -2);
+  scene.add(rim);
+
+  // Gimbal rings for an "attitude indicator" feel
+  function ring(radius, color, rotX, rotY) {
+    const geo = new THREE.TorusGeometry(radius, 0.012, 8, 64);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35 });
+    const m = new THREE.Mesh(geo, mat);
+    m.rotation.x = rotX; m.rotation.y = rotY;
+    scene.add(m);
+  }
+  ring(1.7, 0x00f0ff, Math.PI / 2, 0);
+  ring(1.7, 0xffb627, 0, Math.PI / 2);
+  ring(1.7, 0xc86dff, 0, 0);
+
+  const cubeGroup = new THREE.Group();
+  const faceColors = [0x00f0ff, 0x2ab8a4, 0xffb627, 0xd99640, 0xc86dff, 0x9a6fd1];
+  const cubeGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+  const materials = faceColors.map(c => new THREE.MeshStandardMaterial({ color: c, metalness: 0.2, roughness: 0.45 }));
+  const cubeMesh = new THREE.Mesh(cubeGeo, materials);
+  cubeGroup.add(cubeMesh);
+
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(cubeGeo),
+    new THREE.LineBasicMaterial({ color: 0x0a0e12, linewidth: 2 })
+  );
+  cubeGroup.add(edges);
+
+  // Small antenna + solar-panel wings so it reads as "satellite", not just a box
+  const antennaMat = new THREE.MeshStandardMaterial({ color: 0xe7edf3 });
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 8), antennaMat);
+  antenna.position.set(0, 0.9, 0);
+  cubeGroup.add(antenna);
+
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x1c2f52, metalness: 0.3, roughness: 0.5 });
+  const panelGeo = new THREE.BoxGeometry(1.4, 0.04, 0.55);
+  const panelL = new THREE.Mesh(panelGeo, panelMat); panelL.position.set(-1.3, 0, 0);
+  const panelR = new THREE.Mesh(panelGeo, panelMat); panelR.position.set(1.3, 0, 0);
+  cubeGroup.add(panelL, panelR);
+
+  scene.add(cubeGroup);
+
+  let targetX = 0, targetY = 0, targetZ = 0;
+  function animate() {
+    requestAnimationFrame(animate);
+    // smooth toward latest sensor reading rather than snapping
+    cubeGroup.rotation.x += (targetX - cubeGroup.rotation.x) * 0.12;
+    cubeGroup.rotation.y += (targetY - cubeGroup.rotation.y) * 0.12;
+    cubeGroup.rotation.z += (targetZ - cubeGroup.rotation.z) * 0.12;
+    renderer.render(scene, camera);
+  }
+  resizeCanvas();
+  animate();
+
+  function setOrientation(tiltXdeg, tiltYdeg, tiltZdeg) {
+    const d2r = Math.PI / 180;
+    targetX = tiltXdeg * d2r;
+    targetY = tiltZdeg * d2r;   // yaw -> spin around vertical (three.js Y axis)
+    targetZ = -tiltYdeg * d2r;  // pitch -> forward/back tip
+  }
+
+  // ---------------------------------------------------------------------
+  // Web Serial connection + telemetry parsing
+  // ---------------------------------------------------------------------
+  const connectBtn = document.getElementById('connectBtn');
+  const statusPill = document.getElementById('statusPill');
+  const statusText = document.getElementById('statusText');
+  const lastPacketEl = document.getElementById('lastPacket');
+
+  let port, reader, readableClosed, keepReading = false, lineBuffer = '';
+  let lastPacketTime = 0;
+
+  function setConnected(isConnected) {
+    statusPill.classList.toggle('live', isConnected);
+    statusPill.classList.toggle('offline', !isConnected);
+    statusText.textContent = isConnected ? 'LIVE' : 'OFFLINE';
+    connectBtn.textContent = isConnected ? 'Disconnect' : 'Connect Device';
+  }
+
+  async function connect() {
+    if (!('serial' in navigator)) {
+      alert('Web Serial API not available. Please use Chrome or Edge, and open this file directly (not through a sandboxed preview).');
+      return;
+    }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      keepReading = true;
+      setConnected(true);
+      readLoop();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function disconnect() {
+    keepReading = false;
+    try {
+      if (reader) { await reader.cancel(); }
+      if (port) { await port.close(); }
+    } catch (err) { console.error(err); }
+    setConnected(false);
+  }
+
+  connectBtn.addEventListener('click', () => {
+    if (statusText.textContent === 'LIVE') disconnect(); else connect();
+  });
+
+  async function readLoop() {
+    const decoder = new TextDecoderStream();
+    readableClosed = port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+
+    try {
+      while (keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          lineBuffer += value;
+          let idx;
+          while ((idx = lineBuffer.indexOf('\n')) >= 0) {
+            const line = lineBuffer.slice(0, idx).trim();
+            lineBuffer = lineBuffer.slice(idx + 1);
+            if (line.startsWith('{')) handleTelemetryLine(line);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Serial read error:', err);
+    } finally {
+      reader.releaseLock();
+      setConnected(false);
+    }
+  }
+
+  function handleTelemetryLine(line) {
+    let data;
+    try { data = JSON.parse(line); } catch { return; }
+
+    // Defensive: a single malformed/partial field must never crash the
+    // whole read loop (that would silently drop the connection). Update
+    // each section independently and skip only the part that's bad.
+    try {
+      lastPacketTime = Date.now();
+      lastPacketEl.textContent = 'updated ' + new Date().toLocaleTimeString();
+
+      const n = (v, fallback = 0) => (typeof v === 'number' && isFinite(v)) ? v : fallback;
+
+      const tiltX = n(data.tiltX), tiltY = n(data.tiltY), tiltZ = n(data.tiltZ);
+      document.getElementById('valTiltX').textContent = tiltX.toFixed(1) + '\u00b0';
+      document.getElementById('valTiltY').textContent = tiltY.toFixed(1) + '\u00b0';
+      document.getElementById('valTiltZ').textContent = tiltZ.toFixed(1) + '\u00b0';
+      setOrientation(tiltX, tiltY, tiltZ);
+    } catch (err) { console.warn('Tilt update failed:', err); }
+
+    try {
+      const n = (v, fallback = 0) => (typeof v === 'number' && isFinite(v)) ? v : fallback;
+      document.getElementById('valTemp').innerHTML = n(data.temp).toFixed(1) + '<span class="unit">&deg;C</span>';
+      document.getElementById('valBaroAlt').innerHTML = n(data.baroAlt).toFixed(1) + '<span class="unit">m</span>';
+      document.getElementById('valPressure').innerHTML = n(data.pressure).toFixed(1) + '<span class="unit">hPa</span>';
+    } catch (err) { console.warn('BME280 update failed:', err); }
+
+    try {
+      const ppm = (typeof data.ppm === 'number' && isFinite(data.ppm)) ? data.ppm : 0;
+      document.getElementById('valPpm').textContent = Math.round(ppm);
+      const qTag = document.getElementById('qualityTag');
+      qTag.textContent = (data.quality || 'UNKNOWN').toUpperCase();
+      qTag.className = 'quality-tag ' + qualityClass(data.quality);
+    } catch (err) { console.warn('MQ-135 update failed:', err); }
+
+    try {
+      document.getElementById('valSats').textContent = data.sats || 0;
+      const fixPill = document.getElementById('fixPill');
+      const hasFix = !!data.fix;
+      fixPill.textContent = hasFix ? 'FIX' : 'NO FIX';
+      fixPill.className = 'fix-pill ' + (hasFix ? 'fix-yes' : 'fix-no');
+      document.getElementById('valLat').textContent = (hasFix && typeof data.lat === 'number') ? data.lat.toFixed(6) : '--';
+      document.getElementById('valLon').textContent = (hasFix && typeof data.lon === 'number') ? data.lon.toFixed(6) : '--';
+      const alt = (typeof data.alt === 'number' && isFinite(data.alt)) ? data.alt : 0;
+      document.getElementById('valAlt').innerHTML = alt.toFixed(1) + '<span class="unit">m</span>';
+    } catch (err) { console.warn('GPS update failed:', err); }
+  }
+
+  function qualityClass(q) {
+    switch ((q || '').toLowerCase()) {
+      case 'good': return 'q-good';
+      case 'moderate': return 'q-moderate';
+      case 'poor': return 'q-poor';
+      case 'unhealthy': return 'q-unhealthy';
+      case 'hazardous': return 'q-hazardous';
+      default: return 'q-unknown';
+    }
+  }
+
+  // Flag stale data if no packet for 3s while "connected"
+  setInterval(() => {
+    if (statusText.textContent === 'LIVE' && Date.now() - lastPacketTime > 3000 && lastPacketTime > 0) {
+      lastPacketEl.textContent = 'no data for ' + Math.round((Date.now() - lastPacketTime) / 1000) + 's...';
+    }
+  }, 1000);
+</script>
+</body>
+</html>
